@@ -1,0 +1,941 @@
+// =============================================================================
+// CodeTR - Complete Prisma Schema
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserRole {
+  ADMIN
+  MODERATOR
+  USER
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum LessonType {
+  LESSON
+  QUIZ
+  CHALLENGE
+  PROJECT
+}
+
+enum LessonStepType {
+  EXPLANATION
+  EXAMPLE
+  PRACTICE
+  CHALLENGE
+  QUIZ
+  SUMMARY
+}
+
+enum QuizQuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  CODE_COMPLETION
+  OUTPUT_PREDICTION
+  DRAG_DROP_ORDER
+}
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum NotificationType {
+  XP_EARNED
+  COINS_EARNED
+  ACHIEVEMENT_UNLOCKED
+  DAILY_REWARD
+  COURSE_COMPLETED
+  LESSON_COMPLETED
+  STREAK_MILESTONE
+  LEVEL_UP
+  SYSTEM
+}
+
+enum ChallengeType {
+  WEEKLY
+  MONTHLY
+  SPECIAL
+}
+
+// =============================================================================
+// MODELS
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// User & Auth
+// -----------------------------------------------------------------------------
+
+model User {
+  id                String    @id @default(cuid())
+  name              String?
+  username          String?   @unique
+  email             String    @unique
+  emailVerified     DateTime?
+  image             String?
+  password          String?
+  bio               String?
+  role              UserRole  @default(USER)
+  isActive          Boolean   @default(true)
+
+  // Gamification
+  xp                Int       @default(0)
+  level             Int       @default(1)
+  coins             Int       @default(0)
+  totalXpEarned     Int       @default(0)
+  totalCoinsEarned  Int       @default(0)
+
+  // Streak
+  currentStreak     Int       @default(0)
+  longestStreak     Int       @default(0)
+  lastStreakDate    DateTime?
+  lastLoginDate     DateTime?
+
+  // Settings
+  theme             String    @default("dark")
+  language          String    @default("tr")
+  fontSize          Int       @default(14)
+  notificationsEnabled Boolean @default(true)
+  profilePublic     Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  enrollments       CourseEnrollment[]
+  lessonProgress    LessonProgress[]
+  quizAttempts      QuizAttempt[]
+  achievements      UserAchievement[]
+  notifications     Notification[]
+  dailyRewards      UserDailyReward[]
+  certificates      Certificate[]
+  codeSubmissions   CodeSubmission[]
+  challengeEntries  ChallengeEntry[]
+  sentNotifications Notification[] @relation("SentNotifications")
+  weeklyChallengeSubs WeeklyChallengeSubmission[]
+  keysCreated           AccessKey[]         @relation("KeysCreated")
+  keyRedemptions        KeyRedemption[]
+  equippedBadge         String?
+  badges                UserBadge[]
+  supportTickets        SupportTicket[]
+  lessonComments        LessonComment[]
+  userTag               String?   @unique
+  sentFriendRequests    FriendRequest[]     @relation("SentFriendRequests")
+  receivedFriendRequests FriendRequest[]    @relation("ReceivedFriendRequests")
+  friendships           Friendship[]        @relation("UserFriendships")
+  friendOf              Friendship[]        @relation("FriendOfUser")
+  sentDirectMessages     DirectMessage[]    @relation("SentDirectMessages")
+  receivedDirectMessages DirectMessage[]    @relation("ReceivedDirectMessages")
+
+  @@index([email])
+  @@index([username])
+  @@index([userTag])
+  @@index([xp])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+  used    Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+// -----------------------------------------------------------------------------
+// Course System
+// -----------------------------------------------------------------------------
+
+model CourseCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  order       Int      @default(0)
+
+  courses     Course[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("course_categories")
+}
+
+model Course {
+  id            String      @id @default(cuid())
+  slug          String      @unique
+  title         String
+  description   String      @db.Text
+  shortDesc     String?
+  icon          String?
+  color         String?
+  language      String      // python, javascript, etc.
+  level         CourseLevel @default(BEGINNER)
+  isPublished   Boolean     @default(false)
+  isFeatured    Boolean     @default(false)
+  order         Int         @default(0)
+  xpReward      Int         @default(1000)
+  coinReward    Int         @default(500)
+
+  // Stats (denormalized for performance)
+  totalLessons  Int         @default(0)
+  totalStudents Int         @default(0)
+  avgRating     Float       @default(0)
+
+  categoryId    String?
+  category      CourseCategory? @relation(fields: [categoryId], references: [id])
+
+  chapters      Chapter[]
+  enrollments   CourseEnrollment[]
+  certificates  Certificate[]
+  accessKeys    AccessKey[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([slug])
+  @@index([language])
+  @@index([isPublished])
+  @@map("courses")
+}
+
+model Chapter {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  order       Int
+  isPublished Boolean  @default(false)
+
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([order])
+  @@map("chapters")
+}
+
+model Lesson {
+  id            String     @id @default(cuid())
+  chapterId     String
+  title         String
+  description   String?    @db.Text
+  type          LessonType @default(LESSON)
+  order         Int
+  isPublished   Boolean    @default(false)
+  xpReward      Int        @default(20)
+  coinReward    Int        @default(10)
+  estimatedTime Int        @default(10) // minutes
+
+  chapter       Chapter    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  steps         LessonStep[]
+  progress      LessonProgress[]
+  quiz          Quiz?
+  codeChallenge CodeChallenge?
+  hints         Hint[]
+  comments      LessonComment[]
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([chapterId])
+  @@index([order])
+  @@map("lessons")
+}
+
+model LessonStep {
+  id          String          @id @default(cuid())
+  lessonId    String
+  type        LessonStepType
+  title       String?
+  content     String          @db.Text
+  code        String?         @db.Text
+  language    String?         @default("python")
+  order       Int
+
+  lesson      Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([lessonId])
+  @@map("lesson_steps")
+}
+
+model Hint {
+  id       String  @id @default(cuid())
+  lessonId String
+  content  String  @db.Text
+  cost     Int     @default(5) // coin cost
+  order    Int
+
+  lesson   Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@map("hints")
+}
+
+// -----------------------------------------------------------------------------
+// Code Challenges
+// -----------------------------------------------------------------------------
+
+model CodeChallenge {
+  id              String   @id @default(cuid())
+  lessonId        String   @unique
+  title           String
+  description     String   @db.Text
+  starterCode     String   @db.Text
+  solutionCode    String   @db.Text
+  language        String   @default("python")
+  difficulty      String   @default("easy")
+
+  testCases       TestCase[]
+  submissions     CodeSubmission[]
+
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("code_challenges")
+}
+
+model TestCase {
+  id              String        @id @default(cuid())
+  challengeId     String
+  input           String?       @db.Text
+  expectedOutput  String        @db.Text
+  isHidden        Boolean       @default(false)
+  description     String?
+  order           Int           @default(0)
+
+  challenge       CodeChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([challengeId])
+  @@map("test_cases")
+}
+
+model CodeSubmission {
+  id            String        @id @default(cuid())
+  userId        String
+  challengeId   String
+  code          String        @db.Text
+  language      String
+  passed        Boolean       @default(false)
+  passedTests   Int           @default(0)
+  totalTests    Int           @default(0)
+  executionTime Int?          // milliseconds
+  memoryUsed    Int?          // KB
+  output        String?       @db.Text
+  errorMessage  String?       @db.Text
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge     CodeChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime      @default(now())
+
+  @@index([userId])
+  @@index([challengeId])
+  @@map("code_submissions")
+}
+
+// -----------------------------------------------------------------------------
+// Quizzes
+// -----------------------------------------------------------------------------
+
+model Quiz {
+  id        String         @id @default(cuid())
+  lessonId  String         @unique
+  title     String
+  timeLimit Int?           // seconds, null = no limit
+
+  lesson    Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id            String           @id @default(cuid())
+  quizId        String
+  type          QuizQuestionType @default(MULTIPLE_CHOICE)
+  question      String           @db.Text
+  explanation   String?          @db.Text
+  order         Int
+
+  // For MULTIPLE_CHOICE and TRUE_FALSE
+  options       Json?            // string[]
+  correctAnswer String?
+
+  // For DRAG_DROP_ORDER
+  items         Json?            // string[]
+  correctOrder  Json?            // number[]
+
+  // For CODE_COMPLETION
+  codeTemplate  String?          @db.Text
+  codeSolution  String?          @db.Text
+
+  quiz          Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers       QuizAnswer[]
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([quizId])
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id          String       @id @default(cuid())
+  userId      String
+  quizId      String
+  score       Int          // 0-100
+  passed      Boolean      @default(false)
+  timeTaken   Int?         // seconds
+  xpEarned    Int          @default(0)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz        Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers     QuizAnswer[]
+
+  createdAt   DateTime     @default(now())
+
+  @@index([userId])
+  @@index([quizId])
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id          String       @id @default(cuid())
+  attemptId   String
+  questionId  String
+  answer      String?      @db.Text
+  isCorrect   Boolean      @default(false)
+
+  attempt     QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question    QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_answers")
+}
+
+// -----------------------------------------------------------------------------
+// Progress Tracking
+// -----------------------------------------------------------------------------
+
+model CourseEnrollment {
+  id          String   @id @default(cuid())
+  userId      String
+  courseId    String
+  progress    Float    @default(0) // 0-100
+  completed   Boolean  @default(false)
+  completedAt DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("course_enrollments")
+}
+
+model LessonProgress {
+  id          String    @id @default(cuid())
+  userId      String
+  lessonId    String
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  xpEarned    Int       @default(0)
+  coinsEarned Int       @default(0)
+  attempts    Int       @default(0)
+  bestScore   Int?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
+  @@map("lesson_progress")
+}
+
+// -----------------------------------------------------------------------------
+// Gamification
+// -----------------------------------------------------------------------------
+
+model Achievement {
+  id          String            @id @default(cuid())
+  key         String            @unique
+  title       String
+  description String
+  icon        String
+  rarity      AchievementRarity @default(COMMON)
+  xpReward    Int               @default(50)
+  coinReward  Int               @default(25)
+  condition   Json              // { type, value } - condition to unlock
+  isSecret    Boolean           @default(false)
+
+  users       UserAchievement[]
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+  seen          Boolean     @default(false)
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
+model DailyReward {
+  id         String   @id @default(cuid())
+  day        Int      @unique // 1-30
+  coinReward Int
+  xpReward   Int
+  specialReward String? // e.g. "badge", "certificate_frame"
+
+  @@map("daily_rewards")
+}
+
+model UserDailyReward {
+  id        String   @id @default(cuid())
+  userId    String
+  day       Int      // which day they claimed
+  claimedAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, claimedAt])
+  @@index([userId])
+  @@map("user_daily_rewards")
+}
+
+model Challenge {
+  id          String        @id @default(cuid())
+  type        ChallengeType
+  title       String
+  description String        @db.Text
+  xpReward    Int
+  coinReward  Int
+  startDate   DateTime
+  endDate     DateTime
+  conditions  Json          // Array of condition objects
+
+  entries     ChallengeEntry[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("challenges")
+}
+
+model ChallengeEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  challengeId String
+  completed   Boolean   @default(false)
+  progress    Int       @default(0)
+  completedAt DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@map("challenge_entries")
+}
+
+model WeeklyChallenge {
+  id          String   @id @default(cuid())
+  week        Int      // week number of year
+  year        Int
+  title       String
+  description String   @db.Text
+  xpReward    Int      @default(500)
+  coinReward  Int      @default(250)
+  startDate   DateTime
+  endDate     DateTime
+
+  submissions WeeklyChallengeSubmission[]
+
+  createdAt   DateTime @default(now())
+
+  @@unique([week, year])
+  @@map("weekly_challenges")
+}
+
+model WeeklyChallengeSubmission {
+  id          String          @id @default(cuid())
+  userId      String
+  challengeId String
+  code        String          @db.Text
+  passed      Boolean         @default(false)
+  score       Int             @default(0)
+
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge   WeeklyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime        @default(now())
+
+  @@map("weekly_challenge_submissions")
+}
+
+// -----------------------------------------------------------------------------
+// Notifications
+// -----------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // Extra data (achievementId, xpAmount, etc.)
+  read      Boolean          @default(false)
+  senderId  String?
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender    User?            @relation("SentNotifications", fields: [senderId], references: [id])
+
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+  @@index([userId])
+  @@map("notifications")
+}
+
+// -----------------------------------------------------------------------------
+// Certificates
+// -----------------------------------------------------------------------------
+
+model Certificate {
+  id             String   @id @default(cuid())
+  userId         String
+  courseId       String
+  verificationId String   @unique @default(cuid())
+  issuedAt       DateTime @default(now())
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([verificationId])
+  @@map("certificates")
+}
+
+// -----------------------------------------------------------------------------
+// Analytics / Activity
+// -----------------------------------------------------------------------------
+
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // lesson_completed, quiz_passed, challenge_solved, etc.
+  data      Json?
+  xpEarned  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_activity")
+}
+
+model DailyStats {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  activeUsers     Int      @default(0)
+  newUsers        Int      @default(0)
+  lessonsCompleted Int     @default(0)
+  challengesSolved Int     @default(0)
+  quizzesPassed   Int      @default(0)
+  totalXpEarned   Int      @default(0)
+
+  @@map("daily_stats")
+}
+
+// -----------------------------------------------------------------------------
+// Access Keys (License/Promo Key System)
+// -----------------------------------------------------------------------------
+
+enum AccessKeyType {
+  COURSE_ACCESS    // Unlocks a specific course
+  PREMIUM_MONTH    // 1 month premium access
+  PREMIUM_YEAR     // 1 year premium access
+  XP_BOOST         // Grants bonus XP
+  COIN_PACK        // Grants coins
+  FULL_ACCESS      // Unlocks everything
+}
+
+enum AccessKeyStatus {
+  ACTIVE    // Available to redeem
+  USED      // Already redeemed
+  EXPIRED   // Past expiry date
+  REVOKED   // Manually revoked by admin
+}
+
+model AccessKey {
+  id          String          @id @default(cuid())
+  key         String          @unique  // e.g. "CODETR-XXXX-XXXX-XXXX"
+  type        AccessKeyType   @default(COURSE_ACCESS)
+  status      AccessKeyStatus @default(ACTIVE)
+  description String?                  // Admin note about this key
+  maxUses     Int             @default(1)  // How many times key can be used
+  usedCount   Int             @default(0)
+
+  // What it grants
+  courseId    String?         // For COURSE_ACCESS type
+  xpAmount    Int             @default(0)   // For XP_BOOST
+  coinAmount  Int             @default(0)   // For COIN_PACK
+
+  // Relations
+  courseId_rel Course?        @relation(fields: [courseId], references: [id])
+  createdById  String
+  createdBy    User           @relation("KeysCreated", fields: [createdById], references: [id])
+  redemptions  KeyRedemption[]
+
+  expiresAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([key])
+  @@index([status])
+  @@map("access_keys")
+}
+
+model KeyRedemption {
+  id        String    @id @default(cuid())
+  keyId     String
+  userId    String
+  redeemedAt DateTime @default(now())
+
+  key       AccessKey @relation(fields: [keyId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([keyId, userId])
+  @@map("key_redemptions")
+}
+
+// -----------------------------------------------------------------------------
+// Friendship & Friend Requests
+// -----------------------------------------------------------------------------
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FriendRequest {
+  id         String              @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  sender   User @relation("SentFriendRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("friend_requests")
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user   User @relation("UserFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendOfUser", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+  @@map("friendships")
+}
+
+// -----------------------------------------------------------------------------
+// Support Tickets
+// -----------------------------------------------------------------------------
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  userId      String
+  subject     String
+  category    String         // TEKNIK, ICERIK, ODEME, ONERI, DIGER
+  message     String         @db.Text
+  adminReply  String?        @db.Text
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_tickets")
+}
+
+// -----------------------------------------------------------------------------
+// Admin Granted Badges
+// -----------------------------------------------------------------------------
+
+model UserBadge {
+  id         String   @id @default(cuid())
+  userId     String
+  badgeId    String   // e.g. "b-1", "b-2"
+  badgeTitle String   // e.g. "🐍 Python Kurdu"
+  grantedBy  String   // Admin User ID
+  grantedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+// -----------------------------------------------------------------------------
+// Lesson Community Comments & Discussions
+// -----------------------------------------------------------------------------
+
+model LessonComment {
+  id        String   @id @default(cuid())
+  lessonId  String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@index([userId])
+  @@map("lesson_comments")
+}
+
+// -----------------------------------------------------------------------------
+// Direct Messaging Between Friends
+// -----------------------------------------------------------------------------
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  message    String   @db.Text
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentDirectMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedDirectMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@map("direct_messages")
+}
