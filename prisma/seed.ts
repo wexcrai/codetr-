@@ -3,7 +3,7 @@ import { PrismaNeon } from '@prisma/adapter-neon';
 import { neonConfig } from '@neondatabase/serverless';
 import ws from 'ws';
 import * as dotenv from 'dotenv';
-
+import bcrypt from 'bcryptjs';
 dotenv.config({ path: '.env.local' });
 neonConfig.webSocketConstructor = ws;
 
