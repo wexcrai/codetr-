@@ -95,7 +95,7 @@ export default async function PracticePage() {
     }),
   ]);
 
-  const solvedIds = new Set(completedSubmissions.map((s) => s.challengeId));
+  const solvedIds = new Set(completedSubmissions.map((s: { challengeId: string }) => s.challengeId));
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
