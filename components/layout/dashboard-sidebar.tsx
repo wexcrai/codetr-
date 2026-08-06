@@ -64,11 +64,11 @@ export function DashboardSidebar({
     { name: "Admin Panel", href: "/admin", icon: ShieldCheck },
   ];
 
-  // Example stats for UI
-  const xp = 1250;
-  const nextLevelXp = 2000;
-  const level = 5;
-  const streak = 12;
+  // Stats from session
+  const xp = (session?.user as any)?.xp || 0;
+  const level = (session?.user as any)?.level || 1;
+  const streak = (session?.user as any)?.currentStreak || 0;
+  const nextLevelXp = level * 1000; // Simple formula for next level xp
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full overflow-y-auto overflow-x-hidden">

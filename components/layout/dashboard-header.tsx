@@ -16,10 +16,9 @@ export function DashboardHeader({ onMenuClick, isSidebarCollapsed }: DashboardHe
   const { data: session } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Mock data
-  const coins = 3450;
-  const xp = 1250;
-  const unreadNotifications = 2;
+  const coins = (session?.user as any)?.coins || 0;
+  const xp = (session?.user as any)?.xp || 0;
+  const unreadNotifications = 0; // TODO: Fetch from db later
 
   return (
     <motion.header
@@ -61,7 +60,7 @@ export function DashboardHeader({ onMenuClick, isSidebarCollapsed }: DashboardHe
             </div>
             <div className="w-px h-4 bg-white/20" />
             <div className="flex items-center gap-1.5" title="CodeCoin">
-              <Coins className="w-4 h-4 text-purple-400" />
+              <Coins className="w-4 h-4 text-amber-400" />
               <span className="text-sm font-bold text-white">{coins}</span>
             </div>
           </div>
