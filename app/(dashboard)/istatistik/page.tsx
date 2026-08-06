@@ -32,7 +32,7 @@ export default async function StatsPage() {
   ]);
 
   // Compute Lines of Code
-  const totalLinesOfCode = submissions.reduce((acc, sub) => acc + sub.code.split("\n").length, 0) + (completedLessonsCount * 12);
+  const totalLinesOfCode = submissions.reduce((acc: number, sub: { code: string }) => acc + sub.code.split("\n").length, 0) + (completedLessonsCount * 12);
   const estimatedCodingHours = Math.round((completedLessonsCount * 10 + submissions.length * 5) / 60);
 
   return (
