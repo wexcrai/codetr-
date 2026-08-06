@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { Loader2, Mail, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 // @ts-ignore - Assumption: these actions exist or will be created
-import { loginUser, signInWithProvider } from "@/lib/actions/auth";
+import { loginUser } from "@/lib/actions/auth";
+import { signIn } from "next-auth/react";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Geçerli bir e-posta adresi giriniz" }),
@@ -60,7 +61,7 @@ export default function LoginPage() {
     if (provider === 'discord') setIsDiscordLoading(true);
     
     try {
-      await signInWithProvider(provider);
+      await signIn(provider, { callbackUrl: "/panel" });
     } catch (error) {
       toast.error(`${provider} ile giriş yapılamadı.`);
       setIsGithubLoading(false);

@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { Loader2, Mail, Lock, User, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 // @ts-ignore
-import { registerUser, signInWithProvider } from "@/lib/actions/auth";
+import { registerUser } from "@/lib/actions/auth";
+import { signIn } from "next-auth/react";
 
 const registerSchema = z.object({
   name: z.string().min(2, { message: "Ad soyad en az 2 karakter olmalıdır" }),
@@ -92,7 +93,7 @@ export default function RegisterPage() {
     if (provider === 'discord') setIsDiscordLoading(true);
     
     try {
-      await signInWithProvider(provider);
+      await signIn(provider, { callbackUrl: "/panel" });
     } catch (error) {
       toast.error(`${provider} ile kayıt yapılamadı.`);
       setIsGithubLoading(false);
