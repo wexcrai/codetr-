@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
+import { AIChatWidget } from "@/components/ai/ai-chat-widget";
 import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
@@ -51,6 +52,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {children}
         </div>
       </main>
+
+      {/* AI Chat Widget - floating on all dashboard pages */}
+      <AIChatWidget />
     </div>
   );
 }
